@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dzhamal AI</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+        body { background: #0f172a; color: white; display: flex; height: 100vh; }
+        .sidebar { width: 250px; background: #1e293b; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .new-btn { background: #6366f1; color: white; border: none; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .chat-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+        .chat-item { padding: 10px; background: #334155; border-radius: 6px; cursor: pointer; font-size: 14px; }
+        .main { flex: 1; display: flex; flex-direction: column; }
+        .header { padding: 15px; background: #0f172a; border-bottom: 1px solid #334155; font-weight: bold; }
+        .messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .msg { max-width: 70%; padding: 10px 15px; border-radius: 10px; font-size: 14px; white-space: pre-wrap; }
+        .user { background: #6366f1; align-self: flex-end; }
+        .bot { background: #334155; align-self: flex-start; }
+        .input-box { padding: 15px; background: #0f172a; display: flex; gap: 10px; }
+        input { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #1e293b; color: white; outline: none; }
+        button { padding: 10px 20px; background: #6366f1; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <button class="new-btn" onclick="createNewChat()">+ Новый чат</button>
+        <div class="chat-list" id="chatList"></div>
+    </div>
+    <div class="main">
+        <div class="header">Dzhamal AI</div>
+        <div class="messages" id="messages"></div>
+        <div class="input-box">
+            <input type="text" id="userInput" placeholder="Напиши сообщение..." onkeydown="if(event.key==='Enter') sendMessage()">
+            <button onclick="sendMessage()">Отправить</button>
+        </div>
+    </div>
+
+    <script>
+        let chats = JSON.parse(localStorage.getItem('dzhamal_chats')) || [];
+        let currentChatId = localStorage.getItem('dzhamal_active_chat') || null;
+
+        window.onload = () => {
+            if (chats.length === 0) createNewChat();
+            else {
+                if (!currentChatId) currentChatId = chats[0].id;
+                renderSidebar();
+                loadMessages();
+            }
+        };
+
+        function createNewChat() {
+            const newChat = { id: 'chat_' + Date.now(), title: 'Новый чат', messages: [{ role: 'assistant', content: 'Салам! Я Dzhamal AI.' }] };
+            chats.unshift(newChat);
+            currentChatId = newChat.id;
+            save();
+            renderSidebar();
+            loadMessages();
+        }
+
+        function save() {
+            localStorage.setItem('dzhamal_chats', JSON.stringify(chats));
+            localStorage.setItem('dzhamal_active_chat', currentChatId);
+        }
+
+        function renderSidebar() {
+            const list = document.getElementById('chatList');
+            list.innerHTML = '';
+            chats.forEach(c => {
+                const item = document.createElement('div');
+                item.className = 'chat-item';
+                item.textContent = c.title;
+                item.onclick = () => { currentChatId = c.id; save(); renderSidebar(); loadMessages(); };
+                list.appendChild(item);
+            });
+        }
+
+        function loadMessages() {
+            const box = document.getElementById('messages');
+            box.innerHTML = '';
+            const chat = chats.find(c => c.id === currentChatId);
+            if (!chat) return;
+            chat.messages.forEach(m => {
+                const div = document.createElement('div');
+                div.className = `msg ${m.role === 'user' ? 'user' : 'bot'}`;
+                div.textContent = m.content;
+                box.appendChild(div);
+            });
+            box.scrollTop = box.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const chat = chats.find(c => c.id === currentChatId);
+            if (chat.messages.length <= 1) chat.title = text.substring(0, 15) + '...';
+
+            chat.messages.push({ role: 'user', content: text });
+            input.value = '';
+            save();
+            renderSidebar();
+            loadMessages();
+
+            try {
+                const res = await fetch("/api/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ messages: chat.messages })
+                });
+                const data = await res.json();
+                const reply = data.choices ? data.choices[0].message.content : "Ошибка ответа";
+                chat.messages.push({ role: 'assistant', content: reply });
+            } catch (e) {
+                chat.messages.push({ role: 'assistant', content: "Ошибка связи с сервером." });
+            }
+            save();
+            loadMessages();
+        }
+    </script>
+</body>
+</html>
