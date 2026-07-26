@@ -1,16 +1,24 @@
-const express = require('express');
 const fetch = require('node-fetch');
-const path = require('path');
 
-const app = express();
-app.use(express.json());
-app.use(express.static(path.join(__dirname, '/')));
+module.exports = async (req, res) => {
+    // Включаем CORS, чтобы сайт мог обращаться к серверу
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader(
+        'Access-Control-Allow-Headers',
+        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+    );
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
 
-app.post('/api/chat', async (req, res) => {
     try {
         const { messages } = req.body;
+        const GROQ_API_KEY = process.env.GROQ_API_KEY;
+
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -25,12 +33,11 @@ app.post('/api/chat', async (req, res) => {
                 ]
             })
         });
+
         const data = await response.json();
-        res.json(data);
+        res.status(200).json(data);
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: "Ошибка сервера" });
     }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Сервер работает на порту ${PORT}`));
+};
